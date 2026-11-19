@@ -2,6 +2,8 @@
 
 X 射线镜面反射率（XRR）拟合工作台：层结构建模、Parratt 仿真、差分进化拟合、GenX 项目导入。
 
+> 仓库地址：`https://github.com/<账号>/xrr-studio`（发布后把 `<账号>` 换成你的 GitHub 用户名）
+
 ## 快速上手（5 分钟）
 
 装好之后按这个顺序走一遍，就能得到第一条拟合结果。
@@ -84,47 +86,60 @@ X 射线镜面反射率（XRR）拟合工作台：层结构建模、Parratt 仿�
 - 输出：拟合曲线 `.dat`/`.csv`、膜层结构参数表（含密度 g/cm³ 与占 bulk 百分比）
 - GenX 项目（`.hgx`）导入：解析脚本、参数表、仪器与数据
 
-## 安装（协作者）
+## 别人怎么用
 
-### 1. 克隆仓库
+前提：对方电脑**已经装好 WGallop Agent**，不需要再装软件。
+
+### 第一步：拿到代码
+
+**下载 ZIP**（最简单）：打开仓库页面 → 绿色 `Code` 按钮 → `Download ZIP` → 解压。
+
+**或者 git clone**（想跟着更新）：
 
 ```bash
 git clone https://github.com/<账号>/xrr-studio.git
 ```
 
-### 2. 安装后端依赖
+### 第二步：放进插件目录
 
-插件后端需要 numpy 与 h5py。WGallop 自带的 Python 没有它们，装到插件目录即可：
+把 `xrr-studio` 文件夹放到：
 
-```bash
-python tools/install_deps.py
+```
+C:\Users\<对方的用户名>\.wgallop\plugins\xrr-studio
 ```
 
-脚本会自动寻找 WGallop 的随包 Python（`%USERPROFILE%\.wgallop\runtimes\plugin-python\*\python.exe`），
-把 `numpy`、`h5py` 装进 `vendor/`。也可以用系统 Python：
+要求：这个文件夹里**直接能看到 `plugin.json`**。
+如果解压出来叫 `xrr-studio-main`，重命名成 `xrr-studio`。
 
-```bash
-python tools/install_deps.py --python "C:\Path\To\python.exe"
+### 第三步：装依赖（只做一次）
+
+在 `xrr-studio` 目录里打开命令行（资源管理器地址栏输入 `cmd` 回车），执行：
+
+```bat
+python tools\install_deps.py
 ```
 
-### 3. 让 WGallop 识别插件
+如果提示找不到 python，用 WGallop 自带的解释器（哈希目录名各人不同，任选一个）：
 
-两种方式，任选：
+```bat
+for /d %d in ("%USERPROFILE%\.wgallop\runtimes\plugin-python\*") do "%d\python.exe" tools\install_deps.py
+```
 
-**方式 A：作为开发仓库（推荐，改代码即生效）**
+看到 `Successfully installed numpy ... h5py ...` 就好了，约 60 MB，只做一次。
 
-把克隆下来的目录（根目录含 `plugin.json`）设为 WGallop 的**当前工作区**，
-软件会自动识别为插件开发仓库，插件列表里显示 dev 标记。
-修改文件保存后约 1.6 秒自动重建页面，不需要反复关开插件。
+### 第四步：打开
 
-**方式 B：作为普通插件安装**
+设置 → 插件管理 → 刷新列表 → 找到「XRR 拟合工作台」→ 打开。
+首次打开会问后端授权，点允许。
 
-设置 → 插件管理 → 导入 → 导入本地文件夹，选择该目录。
+然后就是：导入数据 → 建膜系 → F9 仿真 → Ctrl+F 拟合 → 导出。
 
-### 4. 授权后端
+### 如果要跟着改代码
 
-首次打开插件会要求确认 Python 后端授权，点允许。
-**改了 `backend/` 下任何 `.py` 后，需要重新打开插件并确认一次**（授权绑定源码指纹）。
+把 `xrr-studio` 目录设为 WGallop 的**当前工作区**，软件会自动把它识别为开发仓库：
+改文件保存约 1.6 秒自动生效，`git pull` 就能拿到别人的更新。
+
+注意：改 `backend/*.py` 后需要重新打开插件确认一次授权。
 
 ## 界面速查
 
