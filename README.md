@@ -86,34 +86,30 @@ X 射线镜面反射率（XRR）拟合工作台：层结构建模、Parratt 仿�
 - 输出：拟合曲线 `.dat`/`.csv`、膜层结构参数表（含密度 g/cm³ 与占 bulk 百分比）
 - GenX 项目（`.hgx`）导入：解析脚本、参数表、仪器与数据
 
-## 别人怎么用
+## 协作者怎么跑起来
 
-前提：对方电脑**已经装好 WGallop Agent**，不需要再装软件。
+前提两条：
+
+1. 电脑上**已经装好 WGallop Agent**，不需要再装软件
+2. 已被邀请为仓库协作者（私有仓库要先在 GitHub 通知或邮件里点 **Accept invitation**）
 
 ### 第一步：拿到代码
 
-**下载 ZIP**（最简单）：打开仓库页面 → 绿色 `Code` 按钮 → `Download ZIP` → 解压。
+**GitHub Desktop（推荐）**
 
-**或者 git clone**（想跟着更新）：
+`File → Clone repository` → 选 `xrr-studio` → 选一个本地目录（例如 `D:\projects\xrr-studio`）→ **Clone**
+
+**命令行**
 
 ```bash
 git clone https://github.com/<账号>/xrr-studio.git
 ```
 
-### 第二步：放进插件目录
+> 拿到的是源码，不含 `vendor/`（那是平台相关的 numpy/h5py 二进制，下一步单独装）。
 
-把 `xrr-studio` 文件夹放到：
+### 第二步：装依赖（只做一次）
 
-```
-C:\Users\<对方的用户名>\.wgallop\plugins\xrr-studio
-```
-
-要求：这个文件夹里**直接能看到 `plugin.json`**。
-如果解压出来叫 `xrr-studio-main`，重命名成 `xrr-studio`。
-
-### 第三步：装依赖（只做一次）
-
-在 `xrr-studio` 目录里打开命令行（资源管理器地址栏输入 `cmd` 回车），执行：
+在仓库目录里打开命令行（资源管理器地址栏输入 `cmd` 回车），执行：
 
 ```bat
 python tools\install_deps.py
@@ -127,19 +123,46 @@ for /d %d in ("%USERPROFILE%\.wgallop\runtimes\plugin-python\*") do "%d\python.e
 
 看到 `Successfully installed numpy ... h5py ...` 就好了，约 60 MB，只做一次。
 
-### 第四步：打开
+### 第三步：让 WGallop 用上它
 
-设置 → 插件管理 → 刷新列表 → 找到「XRR 拟合工作台」→ 打开。
-首次打开会问后端授权，点允许。
+**要改代码（协作者推荐）**
 
-然后就是：导入数据 → 建膜系 → F9 仿真 → Ctrl+F 拟合 → 导出。
+把仓库目录（里面直接有 `plugin.json`）设为 WGallop 的**当前工作区**。
+软件会自动把它识别为插件开发仓库，插件列表里显示 dev 标记。
+改文件保存后约 1.6 秒自动重建页面，不需要反复关开插件。
 
-### 如果要跟着改代码
+**只用不改**
 
-把 `xrr-studio` 目录设为 WGallop 的**当前工作区**，软件会自动把它识别为开发仓库：
-改文件保存约 1.6 秒自动生效，`git pull` 就能拿到别人的更新。
+把整个目录复制到：
 
-注意：改 `backend/*.py` 后需要重新打开插件确认一次授权。
+```
+C:\Users\<用户名>\.wgallop\plugins\xrr-studio
+```
+
+复制后该文件夹里**直接能看到 `plugin.json`**（如果是 `xrr-studio-main`，改名成 `xrr-studio`）。
+
+### 第四步：验证跑通
+
+1. 设置 → 插件管理 → **刷新列表** → 找到「XRR 拟合工作台」→ 打开
+2. 首次打开会问**后端授权**，点允许
+3. 按 **F9**（仿真）→ 绘图区出现模拟曲线，说明后端正常
+4. 切到「仪器与拟合」页，底部点「**后端环境自检**」→ 应显示 Python 版本与 numpy/h5py 版本
+
+第 3 步失败时：先看「后端环境自检」的提示——报「未连接到宿主后端」就是授权没通过，报 numpy 缺失就是第二步没做成功。
+
+跑通之后：导入数据 → 建膜系 → F9 仿真 → Ctrl+F 拟合 → 导出。
+
+### 第五步：日常协作
+
+| 你要做的 | 怎么做 |
+|---|---|
+| 改界面（html/js/css） | 保存即生效，页面 1.6 秒后自动刷新 |
+| 改后端（`backend/*.py`） | 保存后**重新打开插件并确认一次授权**（授权绑定源码指纹） |
+| 提交改动 | GitHub Desktop：Changes → 填 Summary → **Commit to main** → **Push origin** |
+| 拉取别人的改动 | GitHub Desktop：**Fetch origin** → 有更新时点 **Pull origin** |
+| 做实验性修改 | `git checkout -b feature/xxx`，做完在 GitHub 上开 Pull Request |
+
+提交前检查 Changes 里只应有你改的那几个文件，**不应出现 `vendor/`**。
 
 ## 界面速查
 
