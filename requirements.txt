@@ -1,0 +1,5 @@
+# 插件后端依赖（宿主 Python 不预装，需装到插件目录的 vendor/）
+# 安装：python tools/install_deps.py
+numpy>=2.0
+h5py>=3.10
+

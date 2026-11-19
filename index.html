@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XRR 拟合工作台</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">XRR</span>
+      <span class="title">拟合工作台</span>
+    </div>
+    <div class="actions">
+      <button id="btn-open" class="btn" type="button">导入数据…</button>
+      <button id="btn-sim" class="btn" type="button">仿真 <kbd>F9</kbd></button>
+      <button id="btn-fit" class="btn btn-primary" type="button">开始拟合 <kbd>Ctrl+F</kbd></button>
+      <button id="btn-stop" class="btn" type="button" disabled>停止</button>
+      <button id="btn-save" class="btn" type="button">保存</button>
+      <button id="btn-load" class="btn" type="button">打开工程</button>
+      <button id="btn-export" class="btn" type="button">导出</button>
+      <button id="btn-reset" class="btn" type="button">重置</button>
+    </div>
+    <div class="status" id="status">就绪</div>
+  </header>
+
+  <main class="body">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <span>数据集</span>
+        <span class="badge" id="data-count">0</span>
+      </div>
+      <ul class="data-list" id="data-list"></ul>
+      <div class="sidebar-foot">
+        <button id="btn-import" class="btn btn-block" type="button">导入数据…</button>
+        <button id="btn-remove" class="btn btn-block" type="button">删除选中</button>
+      </div>
+    </aside>
+
+    <section class="main">
+      <div class="plot-wrap">
+        <div class="plot-tabs">
+          <button class="plot-tab is-active" data-plot="data" type="button">数据 / 模拟</button>
+          <button class="plot-tab" data-plot="fom" type="button">FOM 收敛</button>
+          <span class="plot-meta" id="plot-meta"></span>
+        </div>
+        <div class="plot-canvas-wrap">
+          <canvas id="plot"></canvas>
+          <div class="plot-empty" id="plot-empty">
+            <div class="plot-empty-title">还没有曲线</div>
+            <div class="plot-empty-desc">导入一条 XRR 数据，或直接点「仿真」看当前层结构的反射率</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="editor">
+        <div class="tabs" role="tablist">
+          <button class="tab is-active" data-tab="stack" type="button">层结构</button>
+          <button class="tab" data-tab="params" type="button">参数</button>
+          <button class="tab" data-tab="instrument" type="button">仪器与拟合</button>
+        </div>
+
+        <div class="tab-panel" id="panel-stack">
+          <div class="stack-head">
+            <span class="col-name">层</span>
+            <span class="col-formula">材料</span>
+            <span class="col-density">密度 g/cm³</span>
+            <span class="col-thick">厚度 Å</span>
+            <span class="col-rough">界面宽度 Å</span>
+            <span class="col-act"></span>
+          </div>
+          <div class="stack-rows" id="stack-rows"></div>
+          <div class="stack-foot">
+            <button id="btn-add-layer" class="btn btn-sm" type="button">＋ 层</button>
+            <button id="btn-add-pair" class="btn btn-sm" type="button">＋ Mo/Si 双层</button>
+            <button id="btn-add-seg" class="btn btn-sm" type="button">＋ 段</button>
+            <span class="layer-count" id="layer-count"></span>
+          </div>
+        </div>
+
+        <div class="tab-panel is-hidden" id="panel-params">
+          <div class="param-head">
+            <span class="p-name">参数</span>
+            <span class="p-value">值</span>
+            <span class="p-fit">拟合</span>
+            <span class="p-min">最小</span>
+            <span class="p-max">最大</span>
+            <span class="p-err">误差</span>
+            <span class="p-note">密度参考</span>
+          </div>
+          <div class="param-rows" id="param-rows"></div>
+          <p class="hint">勾选「拟合」的参数会参与差分进化；最小/最大决定搜索范围。参数值改动会同步回层结构。</p>
+        </div>
+
+        <div class="tab-panel is-hidden" id="panel-instrument">
+          <div class="field-grid">
+            <label class="field">
+              <span>波长 λ (Å)</span>
+              <input id="in-wavelength" type="number" step="0.001" value="1.54">
+            </label>
+            <label class="field">
+              <span>I₀（强度标定）</span>
+              <input id="in-i0" type="number" step="0.1" value="1">
+            </label>
+            <label class="field">
+              <span>本底 I_bkg</span>
+              <input id="in-ibkg" type="number" step="1e-7" value="0">
+            </label>
+            <label class="field">
+              <span>FOM</span>
+              <select id="in-fom">
+                <option value="chi2bars">chi2bars（带误差加权）</option>
+                <option value="log">log（对数绝对差）</option>
+                <option value="diff">diff（线性绝对差）</option>
+                <option value="R1">R1（晶体学 R 因子）</option>
+                <option value="logR1">logR1（对数 R 因子）</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>最大代数</span>
+              <input id="in-maxgen" type="number" step="10" value="200" min="1">
+            </label>
+            <label class="field">
+              <span>种群大小（0=自动 3×维度）</span>
+              <input id="in-pop" type="number" step="1" value="0" min="0">
+            </label>
+            <label class="field">
+              <span>变异因子 F</span>
+              <input id="in-f" type="number" step="0.05" value="0.7" min="0" max="2">
+            </label>
+            <label class="field">
+              <span>交叉率 CR</span>
+              <input id="in-cr" type="number" step="0.05" value="0.7" min="0" max="1">
+            </label>
+            <label class="field">
+              <span>策略</span>
+              <select id="in-strategy">
+                <option value="best_1_bin">best/1/bin（收敛快）</option>
+                <option value="rand_1_bin">rand/1/bin（多样性好）</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>收敛阈值（0=不启用）</span>
+              <input id="in-spread" type="number" step="0.001" value="0.001" min="0">
+            </label>
+          </div>
+          <div class="group-title">分辨率（Resolution）</div>
+          <div class="field-grid">
+            <label class="field">
+              <span>卷积类型</span>
+              <select id="in-restype">
+                <option value="none">不卷积</option>
+                <option value="fast">固定宽度（fast conv）</option>
+                <option value="relative">相对宽度（res × q）</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>宽度 σ（q 单位 Å⁻¹）</span>
+              <input id="in-res" type="number" step="0.0001" value="0.001">
+            </label>
+            <label class="field">
+              <span>采样点数</span>
+              <input id="in-respoints" type="number" step="1" value="5" min="3" max="51">
+            </label>
+            <label class="field">
+              <span>积分范围（±σ 倍数）</span>
+              <input id="in-resspread" type="number" step="0.5" value="2" min="1">
+            </label>
+          </div>
+
+          <div class="group-title">照射面积（Footprint）</div>
+          <div class="field-grid">
+            <label class="field">
+              <span>修正类型</span>
+              <select id="in-footype">
+                <option value="none">不修正</option>
+                <option value="gauss">高斯束</option>
+                <option value="square">方形束</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>束宽（mm）</span>
+              <input id="in-beamw" type="number" step="0.01" value="0.05">
+            </label>
+            <label class="field">
+              <span>样品长（mm）</span>
+              <input id="in-samplelen" type="number" step="0.1" value="10">
+            </label>
+          </div>
+
+          <p class="hint">分辨率在 q 空间做高斯卷积；footprint 修正低角度照射溢出。两者都会进入拟合的每次评估。</p>
+          <p class="hint">
+            <a href="#" id="link-manual-path">手动输入工程路径</a>
+            ·
+            <a href="#" id="link-diagnose">后端环境自检</a>
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal is-hidden" id="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <span id="modal-title">标题</span>
+      <button id="modal-close" class="btn-icon" type="button">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot">
+      <button id="modal-cancel" class="btn" type="button">取消</button>
+      <button id="modal-ok" class="btn btn-primary" type="button">确定</button>
+    </div>
+  </div>
+</div>
+
+<input id="file-input" type="file" accept=".dat,.txt,.csv,.xy,.xrr" multiple hidden>
+<input id="project-file" type="file" accept=".hgx,.json" hidden>
+<script src="assets/mock-host.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

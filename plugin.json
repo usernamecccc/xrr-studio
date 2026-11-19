@@ -1,0 +1,47 @@
+{
+  "id": "xrr-studio",
+  "name": "XRR 拟合工作台",
+  "version": "0.7.2",
+  "description": "X 射线镜面反射率（XRR）拟合工作台：层结构建模、Parratt 仿真、差分进化拟合",
+  "icon": "",
+  "entry": "index.html",
+  "panel_entry": "index.html",
+  "settings_entry": "",
+  "panel_position": "center",
+  "slots": [
+    "chat"
+  ],
+  "buttons": [],
+  "backend": {
+    "server": "backend/server.py",
+    "ui_methods": {
+      "simulate": "read",
+      "materials": "read",
+      "sld_profile": "read",
+      "fit_start": "read",
+      "fit_status": "read",
+      "fit_stop": "read",
+      "save_project": "host",
+      "load_project": "read",
+      "list_projects": "read",
+      "export_data": "host",
+      "import_hgx": "read",
+      "diagnose": "read"
+    },
+    "agent_tools": [
+      "diagnose",
+      "simulate",
+      "import_hgx"
+    ]
+  },
+  "agent": {
+    "enabled": true,
+    "description": "XRR 反射率仿真、拟合与 GenX 项目导入",
+    "permissions": [],
+    "actions": [],
+    "events": [],
+    "commands": [],
+    "event_schemas": {},
+    "command_schemas": {}
+  }
+}

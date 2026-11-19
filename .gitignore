@@ -1,0 +1,32 @@
+# 运行时依赖（平台相关，用 tools/install_deps.py 安装，不入库）
+vendor/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 开发用：模拟宿主桥，只在 ?mock=1 时生效
+assets/mock-host.js
+
+# 宿主写入的状态文件
+.registry.json
+plugin-state.json
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 日志与临时文件
+*.log
+*.tmp
+~$*
+
+# 本地数据（项目文件、导出结果、示例原始数据）
+*.hgx
+*.dat
+!data/materials/*.dat
+exports/
+
