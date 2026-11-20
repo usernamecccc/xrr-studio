@@ -28,6 +28,7 @@
     params: [],
     bulk: {},
     elements: [],
+    lastDir: '',
     sim: null,
     fitJob: null,
     fitTimer: null,
@@ -1250,6 +1251,51 @@
     });
   }
 
+  function showSavedResult(title, path, detail) {
+    var body = document.createElement('div');
+    var text = document.createElement('p');
+    text.className = 'hint';
+    text.textContent = detail || '';
+    body.appendChild(text);
+
+    var box = document.createElement('div');
+    box.className = 'path-box';
+    box.textContent = path;
+    body.appendChild(box);
+
+    var row = document.createElement('div');
+    row.style.marginTop = '10px';
+    var openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'btn btn-primary';
+    openBtn.textContent = '打开文件夹';
+    openBtn.addEventListener('click', function () {
+      callBackend('reveal_path', { path: path }).catch(function (err) {
+        setStatus('打开文件夹失败：' + (err && err.message ? err.message : err), true);
+      });
+    });
+    row.appendChild(openBtn);
+    body.appendChild(row);
+
+    openModal(title, body, null, '关闭');
+    $('modal-cancel').style.display = 'none';
+  }
+
+  function makeDirField(defaultPlaceholder) {
+    var label = document.createElement('label');
+    label.className = 'field';
+    var span = document.createElement('span');
+    span.textContent = '保存位置（绝对路径，留空用默认目录）';
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'dir-input';
+    input.value = state.lastDir || '';
+    input.placeholder = defaultPlaceholder || '例如 D:\\XRR 结果';
+    label.appendChild(span);
+    label.appendChild(input);
+    return { label: label, input: input };
+  }
+
   function showDiagnose() {
     var body = document.createElement('div');
     var pre = document.createElement('pre');
@@ -1295,16 +1341,19 @@
     label.appendChild(span);
     label.appendChild(input);
     body.appendChild(label);
-    var hint = document.createElement('p');
-    hint.className = 'hint';
-    hint.textContent = '保存为 JSON 项目文件，默认目录 ~/Documents/XRR。';
-    body.appendChild(hint);
+    var dirField = makeDirField('C:\\Users\\<你>\\Documents\\XRR');
+    body.appendChild(dirField.label);
 
     openModal('保存项目', body, function () {
       var name = input.value.trim();
-      callBackend('save_project', { name: name, data: collectProject() }).then(function (res) {
+      var dir = dirField.input.value.trim();
+      setStatus('正在保存…');
+      callBackend('save_project', { name: name, data: collectProject(), dir: dir }).then(function (res) {
+        state.lastDir = dir;
         closeModal();
         setStatus('已保存：' + res.path);
+        showSavedResult('保存成功', res.path,
+          '项目已保存（' + Math.round(res.size / 1024) + ' KB）：');
       }).catch(function (err) {
         setStatus('保存失败：' + (err && err.message ? err.message : err), true);
       });
@@ -1559,10 +1608,8 @@
     nameLabel.appendChild(nameInput);
     body.appendChild(nameLabel);
 
-    var hint = document.createElement('p');
-    hint.className = 'hint';
-    hint.textContent = '导出到 ~/Documents/XRR。';
-    body.appendChild(hint);
+    var dirField = makeDirField('C:\\Users\\<你>\\Documents\\XRR');
+    body.appendChild(dirField.label);
 
     openModal('导出', body, function () {
       var rows;
@@ -1584,14 +1631,20 @@
         rows = buildSummaryRows();
         ext = 'txt';
       }
+      var dir = dirField.input.value.trim();
+      setStatus('正在导出…');
       callBackend('export_data', {
         kind: kind,
         name: nameInput.value.trim(),
         ext: ext,
+        dir: dir,
         rows: rows
       }).then(function (res) {
+        state.lastDir = dir;
         closeModal();
         setStatus('已导出 ' + res.rows + ' 行：' + res.path);
+        showSavedResult('导出成功', res.path,
+          '已写入 ' + res.rows + ' 行（' + Math.round(res.size / 1024) + ' KB）：');
       }).catch(function (err) {
         setStatus('导出失败：' + (err && err.message ? err.message : err), true);
       });

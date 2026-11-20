@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -26,6 +27,23 @@ def _ensure_dir() -> Path:
     return DEFAULT_DIR
 
 
+def resolve_dir(params: dict | None) -> Path:
+    """解析保存目录：优先用调用方给的绝对路径，否则用默认目录。"""
+    raw = ((params or {}).get("dir") or "").strip().strip('"')
+    if not raw:
+        return _ensure_dir()
+    target = Path(os.path.expandvars(os.path.expanduser(raw)))
+    if not target.is_absolute():
+        raise ValueError("保存位置必须是绝对路径，例如 D:\\XRR 结果")
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ValueError(f"无法创建目录 {target}：{exc}") from exc
+    if not target.is_dir():
+        raise ValueError(f"不是目录：{target}")
+    return target
+
+
 def _stamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -35,7 +53,8 @@ def save_project(params: dict) -> dict:
     if not isinstance(data, dict):
         raise ValueError("缺少项目数据")
     name = _safe_name(params.get("name"), _stamp())
-    path = _ensure_dir() / f"{name}.json"
+    directory = resolve_dir(params)
+    path = directory / f"{name}.json"
     path.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     return {"path": str(path), "name": path.stem, "size": path.stat().st_size}
 
@@ -85,7 +104,8 @@ def export_data(params: dict) -> dict:
     ext = (params.get("ext") or "csv").lower()
     if ext not in ("csv", "tsv", "txt", "dat"):
         ext = "csv"
-    path = _ensure_dir() / f"{name}.{ext}"
+    directory = resolve_dir(params)
+    path = directory / f"{name}.{ext}"
 
     sep = "\t" if ext in ("tsv", "txt", "dat") else ","
     lines = []
@@ -96,6 +116,27 @@ def export_data(params: dict) -> dict:
             lines.append(str(row))
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return {"path": str(path), "rows": len(rows), "size": path.stat().st_size}
+
+
+def reveal_path(params: dict) -> dict:
+    """在文件管理器中打开文件所在目录（或目录本身）。"""
+    raw = ((params or {}).get("path") or "").strip().strip('"')
+    if not raw:
+        raise ValueError("缺少路径")
+    target = Path(os.path.expandvars(os.path.expanduser(raw)))
+    if not target.exists():
+        raise FileNotFoundError(f"路径不存在：{target}")
+    directory = target.parent if target.is_file() else target
+    try:
+        os.startfile(str(directory))  # Windows
+    except AttributeError:
+        import subprocess
+        import sys
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        subprocess.Popen([opener, str(directory)])
+    except OSError as exc:
+        raise ValueError(f"无法打开文件夹：{exc}") from exc
+    return {"opened": str(directory)}
 
 
 def _format_cell(value) -> str:

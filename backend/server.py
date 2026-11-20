@@ -124,6 +124,13 @@ def import_hgx(params, caller=None):
         return _fail(exc)
 
 
+def reveal_path(params, caller=None):
+    try:
+        return _ok(project.reveal_path(params or {}))
+    except Exception as exc:  # noqa: BLE001
+        return _fail(exc)
+
+
 def save_project(params, caller=None):
     try:
         return _ok(project.save_project(params or {}))
@@ -248,6 +255,16 @@ _TOOLS = [
             "additionalProperties": True,
         },
         "execute": import_hgx,
+    },
+    {
+        "name": "reveal_path",
+        "description": "在系统文件管理器中打开文件所在目录。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "additionalProperties": True,
+        },
+        "execute": reveal_path,
     },
     {
         "name": "save_project",
