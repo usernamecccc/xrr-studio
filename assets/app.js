@@ -21,9 +21,12 @@
       substrate: { formula: 'Si', density: 2.329 }
     },
     instrument: {
-      wavelength: 1.54, i0: 1, ibkg: 0,
-      resolution: { type: 'none', width: 0.001, points: 5, spread: 2 },
-      footprint: { type: 'none', beam_width: 0.05, sample_length: 10 }
+      wavelength: 1.54,
+      i0: 205876,
+      ibkg: 0.9890035,
+      tthoff: 0.002314288,
+      resolution: { type: 'fast', width: 0.01701999, points: 5, spread: 2 },
+      footprint: { type: 'square', beam_width: 0.03794963, sample_length: 5.09446 }
     },
     params: [],
     bulk: {},
@@ -498,15 +501,21 @@
       });
     });
 
-    var wl = numberOr(state.instrument.wavelength, 1.54);
-    list.push(makeParam('inst.wavelength', '波长 λ (Å)', wl, false,
-      +(wl * 0.95).toFixed(3), +(wl * 1.05).toFixed(3)));
+    // 仪器参数：I0 / samplelen 每次按样品调整范围，其余四项范围固定
     var resCfg = state.instrument.resolution || {};
-    var resWidth = numberOr(resCfg.width, 0.001);
-    list.push(makeParam('inst.res_width', '分辨率宽度 σ', resWidth, false, 0,
-      Math.max(resWidth * 5, 0.01)));
-    list.push(makeParam('inst.i0', 'I₀', numberOr(state.instrument.i0, 1), false, 0.05, 5));
-    list.push(makeParam('inst.ibkg', '本底 I_bkg', numberOr(state.instrument.ibkg, 0), false, 0, 1e-3));
+    list.push(makeParam('inst.res_width', '分辨率宽度 σ', numberOr(resCfg.width, 0.01701999),
+      true, 0.00075, 0.05));
+    list.push(makeParam('inst.i0', 'I₀（总光强）', numberOr(state.instrument.i0, 205876),
+      true, 100000, 250000));
+    list.push(makeParam('inst.ibkg', '本底 I_bkg', numberOr(state.instrument.ibkg, 0.9890035),
+      true, 0, 2));
+    list.push(makeParam('inst.tthoff', '角度偏移 (°)', numberOr(state.instrument.tthoff, 0.002314288),
+      true, 0, 0.01));
+    var footCfg = state.instrument.footprint || {};
+    list.push(makeParam('inst.beam_width', '束宽 (mm)', numberOr(footCfg.beam_width, 0.03794963),
+      true, 0.01, 0.05));
+    list.push(makeParam('inst.sample_length', '样品长 (mm)', numberOr(footCfg.sample_length, 5.09446),
+      true, 2, 20));
     state.params = list;
   }
 
@@ -529,9 +538,26 @@
       var flat = state.stack.segments[0] && state.stack.segments[0].layers;
       if (flat && flat[index]) flat[index][parts[2]] = value;
     } else if (parts[0] === 'inst') {
-      state.instrument[parts[1]] = value;
-      if (parts[1] === 'i0' && $('in-i0')) $('in-i0').value = String(value);
-      if (parts[1] === 'ibkg' && $('in-ibkg')) $('in-ibkg').value = String(value);
+      var field = parts[1];
+      if (field === 'res_width') {
+        state.instrument.resolution = state.instrument.resolution || {};
+        state.instrument.resolution.width = value;
+        if ($('in-res')) $('in-res').value = String(value);
+      } else if (field === 'beam_width') {
+        state.instrument.footprint = state.instrument.footprint || {};
+        state.instrument.footprint.beam_width = value;
+        if ($('in-beamw')) $('in-beamw').value = String(value);
+      } else if (field === 'sample_length') {
+        state.instrument.footprint = state.instrument.footprint || {};
+        state.instrument.footprint.sample_length = value;
+        if ($('in-samplelen')) $('in-samplelen').value = String(value);
+      } else {
+        state.instrument[field] = value;
+        if (field === 'i0' && $('in-i0')) $('in-i0').value = String(value);
+        if (field === 'ibkg' && $('in-ibkg')) $('in-ibkg').value = String(value);
+        if (field === 'wavelength' && $('in-wavelength')) $('in-wavelength').value = String(value);
+        if (field === 'tthoff' && $('in-tthoff')) $('in-tthoff').value = String(value);
+      }
     } else if (parts[0] === 'ambient' || parts[0] === 'substrate') {
       state.stack[parts[0]][parts[1]] = value;
     }
@@ -1140,6 +1166,7 @@
     $('in-wavelength').value = String(inst.wavelength);
     $('in-i0').value = String(inst.i0);
     $('in-ibkg').value = String(inst.ibkg);
+    if ($('in-tthoff')) $('in-tthoff').value = String(inst.tthoff != null ? inst.tthoff : 0);
     var res = inst.resolution || {};
     $('in-restype').value = res.type || 'none';
     $('in-res').value = String(res.width != null ? res.width : 0.001);
@@ -1755,20 +1782,21 @@
         substrate: { formula: 'Si', density: 2.329 }
       };
       state.instrument = {
-        wavelength: 1.54, i0: 1, ibkg: 0,
-        resolution: { type: 'none', width: 0.001, points: 5, spread: 2 },
-        footprint: { type: 'none', beam_width: 0.05, sample_length: 10 }
+        wavelength: 1.54, i0: 205876, ibkg: 0.9890035, tthoff: 0.002314288,
+        resolution: { type: 'fast', width: 0.01701999, points: 5, spread: 2 },
+        footprint: { type: 'square', beam_width: 0.03794963, sample_length: 5.09446 }
       };
       $('in-wavelength').value = '1.54';
-      $('in-i0').value = '1';
-      $('in-ibkg').value = '0';
-      $('in-restype').value = 'none';
-      $('in-res').value = '0.001';
+      $('in-i0').value = '205876';
+      $('in-ibkg').value = '0.9890035';
+      $('in-restype').value = 'fast';
+      $('in-res').value = '0.01701999';
       $('in-respoints').value = '5';
       $('in-resspread').value = '2';
-      $('in-footype').value = 'none';
-      $('in-beamw').value = '0.05';
-      $('in-samplelen').value = '10';
+      $('in-footype').value = 'square';
+      $('in-beamw').value = '0.03794963';
+      $('in-samplelen').value = '5.09446';
+      if ($('in-tthoff')) $('in-tthoff').value = '0.002314288';
       syncParamsFromStack();
       renderDataList();
       renderStack();
@@ -1860,7 +1888,14 @@
     });
     $('in-samplelen').addEventListener('change', function () {
       state.instrument.footprint.sample_length = numberOr(this.value, 0);
+      syncParamValue('inst.sample_length', state.instrument.footprint.sample_length);
     });
+    if ($('in-tthoff')) {
+      $('in-tthoff').addEventListener('change', function () {
+        state.instrument.tthoff = numberOr(this.value, 0);
+        syncParamValue('inst.tthoff', state.instrument.tthoff);
+      });
+    }
 
     document.addEventListener('keydown', function (ev) {
       if (ev.key === 'F9') {

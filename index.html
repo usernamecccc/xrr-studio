@@ -97,16 +97,16 @@
         <div class="tab-panel is-hidden" id="panel-instrument">
           <div class="field-grid">
             <label class="field">
-              <span>波长 λ (Å)</span>
+              <span>波长 λ (Å)（固定）</span>
               <input id="in-wavelength" type="number" step="0.001" value="1.54">
             </label>
             <label class="field">
-              <span>I₀（强度标定）</span>
-              <input id="in-i0" type="number" step="0.1" value="1">
+              <span>I₀（总光强）</span>
+              <input id="in-i0" type="number" step="1" value="205876">
             </label>
             <label class="field">
               <span>本底 I_bkg</span>
-              <input id="in-ibkg" type="number" step="1e-7" value="0">
+              <input id="in-ibkg" type="number" step="0.001" value="0.9890035">
             </label>
             <label class="field">
               <span>FOM</span>
@@ -152,13 +152,13 @@
               <span>卷积类型</span>
               <select id="in-restype">
                 <option value="none">不卷积</option>
-                <option value="fast">固定宽度（fast conv）</option>
+                <option value="fast" selected>固定宽度（fast conv）</option>
                 <option value="relative">相对宽度（res × q）</option>
               </select>
             </label>
             <label class="field">
-              <span>宽度 σ（q 单位 Å⁻¹）</span>
-              <input id="in-res" type="number" step="0.0001" value="0.001">
+              <span>宽度 σ（横坐标单位）</span>
+              <input id="in-res" type="number" step="0.0001" value="0.01701999">
             </label>
             <label class="field">
               <span>采样点数</span>
@@ -177,16 +177,20 @@
               <select id="in-footype">
                 <option value="none">不修正</option>
                 <option value="gauss">高斯束</option>
-                <option value="square">方形束</option>
+                <option value="square" selected>方形束</option>
               </select>
             </label>
             <label class="field">
               <span>束宽（mm）</span>
-              <input id="in-beamw" type="number" step="0.01" value="0.05">
+              <input id="in-beamw" type="number" step="0.001" value="0.03794963">
             </label>
             <label class="field">
               <span>样品长（mm）</span>
-              <input id="in-samplelen" type="number" step="0.1" value="10">
+              <input id="in-samplelen" type="number" step="0.01" value="5.09446">
+            </label>
+            <label class="field">
+              <span>角度偏移 tthoff（°）</span>
+              <input id="in-tthoff" type="number" step="0.0001" value="0.002314288">
             </label>
           </div>
 
