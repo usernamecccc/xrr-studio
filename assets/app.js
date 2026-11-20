@@ -32,7 +32,6 @@
     bulk: {},
     elements: [],
     lastDir: '',
-    fomFocus: false,
     sim: null,
     fitJob: null,
     fitTimer: null,
@@ -1078,20 +1077,12 @@
     var ctx = env.ctx;
     var width = env.width;
     var height = env.height;
-    var fullHistory = state.fitHistory;
-    $('plot-empty').classList.toggle('is-hidden', !!(fullHistory && fullHistory.length));
+    var history = state.fitHistory;
+    $('plot-empty').classList.toggle('is-hidden', !!(history && history.length));
 
-    if (!fullHistory || !fullHistory.length) {
+    if (!history || !history.length) {
       $('plot-meta').textContent = '';
       return;
-    }
-
-    // 聚焦模式：只看后 30% 的代数，纵轴按该区间自适应，便于观察后期细微下降
-    var offset = 0;
-    var history = fullHistory;
-    if (state.fomFocus && fullHistory.length > 20) {
-      offset = Math.floor(fullHistory.length * 0.7);
-      history = fullHistory.slice(offset);
     }
 
     var pad = { l: 70, r: 18, t: 18, b: 36 };
@@ -1110,7 +1101,6 @@
     var n = history.length;
     var xMax = Math.max(n - 1, 1);
     var sx = function (i) { return pad.l + i / xMax * W; };
-    var generationOf = function (i) { return i + offset; };
     var sy = function (v) {
       var lv = v > 0 ? Math.log10(v) : yMinLog;
       return pad.t + (yMaxLog - lv) / (yMaxLog - yMinLog) * H;
@@ -1147,7 +1137,7 @@
       ctx.stroke();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(String(generationOf(idx)), px, pad.t + H + 8);
+      ctx.fillText(String(idx), px, pad.t + H + 8);
     }
 
     ctx.textAlign = 'center';
@@ -1182,11 +1172,7 @@
     ctx.fillStyle = textColor;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    var caption = '当前最优 FOM = ' + fmt(best);
-    if (offset > 0) {
-      caption += '（第 ' + offset + '–' + (offset + n - 1) + ' 代）';
-    }
-    ctx.fillText(caption, pad.l + 10, pad.t + 12);
+    ctx.fillText('当前最优 FOM = ' + fmt(best), pad.l + 10, pad.t + 12);
   }
 
   function syncPlotTabs() {
@@ -1913,20 +1899,6 @@
         draw();
       });
     });
-
-    var focusBtn = $('btn-fom-focus');
-    if (focusBtn) {
-      focusBtn.addEventListener('click', function () {
-        state.fomFocus = !state.fomFocus;
-        focusBtn.textContent = state.fomFocus ? '显示全部' : '聚焦后期';
-        focusBtn.classList.toggle('is-active', state.fomFocus);
-        if (state.plotMode !== 'fom') {
-          state.plotMode = 'fom';
-          syncPlotTabs();
-        }
-        draw();
-      });
-    }
 
     $('in-wavelength').addEventListener('change', function () {
       state.instrument.wavelength = numberOr(this.value, 1.54);
