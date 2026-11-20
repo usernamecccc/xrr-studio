@@ -398,6 +398,8 @@ class FitJob:
                 "history": list(self.history),
                 "elapsed": (self.finished or time.time()) - self.started,
                 "error": self.error,
+                "best_vector": self.best_vector,
+                "fit_keys": [p["key"] for p in (self.payload.get("params") or []) if p.get("fit")],
             }
             if include_final and self.state in ("done", "stopped") and hasattr(self, "final"):
                 out["final_intensity"] = self.final["intensity"]

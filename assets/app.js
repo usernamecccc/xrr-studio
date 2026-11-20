@@ -841,11 +841,12 @@
       state.fitMaxGen = snap.max_generations;
       state.fitBest = snap.best_fom;
       state.fitHistory = snap.history || [];
+      applyBestVector(snap);
       $('plot-meta').textContent = '第 ' + snap.generation + ' / ' + snap.max_generations +
         ' 代 · FOM ' + fmt(snap.best_fom);
       draw();
       if (snap.state === 'running') {
-        state.fitTimer = setTimeout(pollFit, 350);
+        state.fitTimer = setTimeout(pollFit, 180);
       } else {
         finishFit(snap);
       }
@@ -855,6 +856,32 @@
       $('btn-stop').disabled = true;
       setStatus('轮询失败：' + (err && err.message ? err.message : err), true);
     });
+  }
+
+  function applyBestVector(snap) {
+    if (!snap || !snap.best_vector || !snap.best_vector.length) return;
+    var keys = snap.fit_keys || [];
+    if (!keys.length) return;
+    for (var i = 0; i < keys.length; i += 1) {
+      var key = keys[i];
+      var value = snap.best_vector[i];
+      if (value == null || !isFinite(value)) continue;
+      setStackValue(key, value);
+      var p = findParam(key);
+      if (p) p.value = value;
+    }
+    updateParamValues();
+  }
+
+  function updateParamValues() {
+    var rows = document.querySelectorAll('#param-rows .param-row');
+    if (!rows.length) return;
+    for (var i = 0; i < rows.length && i < state.params.length; i += 1) {
+      var inputs = rows[i].querySelectorAll('input');
+      if (inputs.length >= 1 && document.activeElement !== inputs[0]) {
+        inputs[0].value = String(+state.params[i].value.toPrecision(6));
+      }
+    }
   }
 
   function finishFit(snap) {
