@@ -2,6 +2,9 @@
 (function () {
   'use strict';
 
+  // 模拟曲线的采样倍率：8 = 数据点数的 8 倍（越大越平滑，仿真越慢）
+  var SMOOTH_FACTOR = 8;
+
   var $ = function (id) { return document.getElementById(id); };
 
   var state = {
@@ -710,10 +713,10 @@
     if (ds) {
       payload.x_unit = ds.xUnit;
       if (dense) {
-        // 谷底处曲线变化极快，用 4 倍密网格绘制，避免连线出现锯齿
+        // 峰谷处曲线变化极快，用 8 倍密网格绘制；SMOOTH_FACTOR 可调（越大越平滑越慢）
         var xmin = Math.min.apply(null, ds.x);
         var xmax = Math.max.apply(null, ds.x);
-        var count = Math.max(800, Math.min(ds.x.length * 4, 6000));
+        var count = Math.max(1000, Math.min(ds.x.length * SMOOTH_FACTOR, 24000));
         payload.x = linspace(xmin, xmax, count);
       } else {
         payload.x = ds.x;
