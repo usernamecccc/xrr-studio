@@ -683,7 +683,7 @@
   }
 
   // ---------------------------------------------------------------- 仿真
-  function buildSimPayload() {
+  function buildSimPayload(dense) {
     var ds = activeDataset();
     var payload = {
       wavelength: numberOr(state.instrument.wavelength, 1.54),
@@ -708,10 +708,18 @@
       })
     };
     if (ds) {
-      payload.x = ds.x;
       payload.x_unit = ds.xUnit;
+      if (dense) {
+        // 谷底处曲线变化极快，用 4 倍密网格绘制，避免连线出现锯齿
+        var xmin = Math.min.apply(null, ds.x);
+        var xmax = Math.max.apply(null, ds.x);
+        var count = Math.max(800, Math.min(ds.x.length * 4, 6000));
+        payload.x = linspace(xmin, xmax, count);
+      } else {
+        payload.x = ds.x;
+      }
     } else {
-      payload.q = linspace(0.01, 0.6, 400);
+      payload.q = linspace(0.01, 0.6, 800);
       payload.x_unit = 'q';
     }
     return payload;
@@ -743,7 +751,7 @@
     var started = Date.now();
     var payload;
     try {
-      payload = buildSimPayload();
+      payload = buildSimPayload(true);
     } catch (err) {
       state.busy = false;
       btn.disabled = false;
@@ -1575,21 +1583,39 @@
     });
   }
 
+  function interpSeries(srcX, srcY, targetX) {
+    var out = [];
+    var j = 0;
+    var n = srcX.length;
+    for (var i = 0; i < targetX.length; i += 1) {
+      var x = targetX[i];
+      while (j < n - 2 && srcX[j + 1] < x) j += 1;
+      var x0 = srcX[j];
+      var x1 = srcX[j + 1];
+      var y0 = srcY[j];
+      var y1 = srcY[j + 1];
+      if (x1 === x0) { out.push(y0); continue; }
+      var t = (x - x0) / (x1 - x0);
+      out.push(y0 + (y1 - y0) * t);
+    }
+    return out;
+  }
+
   function buildCurveRows() {
     var ds = activeDataset();
     var sim = state.sim;
     var rows = [['x', 'measured', 'simulated', 'residual']];
     if (!ds) return rows;
-    var simMap = null;
+    var simY = null;
     if (sim && sim.intensity && sim.x && sim.intensity.length === sim.x.length) {
-      simMap = {};
-      for (var k = 0; k < sim.x.length; k += 1) simMap[sim.x[k]] = sim.intensity[k];
+      simY = sim.intensity.length === ds.x.length
+        ? sim.intensity
+        : interpSeries(sim.x, sim.intensity, ds.x);
     }
     for (var i = 0; i < ds.x.length; i += 1) {
       var xv = ds.x[i];
       var yv = ds.y[i];
-      var sv = sim && sim.intensity && sim.intensity.length === ds.x.length
-        ? sim.intensity[i] : (simMap && simMap[xv] != null ? simMap[xv] : '');
+      var sv = simY ? simY[i] : '';
       var rv = (sv === '' || sv == null) ? '' : yv - sv;
       rows.push([xv, yv, sv, rv]);
     }
