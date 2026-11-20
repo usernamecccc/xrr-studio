@@ -1789,6 +1789,7 @@
       $('in-wavelength').value = '1.54';
       $('in-i0').value = '205876';
       $('in-ibkg').value = '0.9890035';
+      if ($('in-fom')) $('in-fom').value = 'log';
       $('in-restype').value = 'fast';
       $('in-res').value = '0.01701999';
       $('in-respoints').value = '5';
