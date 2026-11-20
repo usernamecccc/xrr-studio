@@ -428,6 +428,25 @@
   }
 
   // ---------------------------------------------------------------- 参数表
+  // 这四项的拟合范围固定，不允许手动修改；数值本身仍参与拟合
+  var LOCKED_RANGES = {
+    'inst.beam_width': [0.01, 0.05],
+    'inst.res_width': [0.00075, 0.05],
+    'inst.tthoff': [0, 0.01],
+    'inst.ibkg': [0, 2]
+  };
+
+  function applyLockedRanges() {
+    state.params.forEach(function (p) {
+      var range = LOCKED_RANGES[p.key];
+      if (range) {
+        p.lockRange = true;
+        p.min = range[0];
+        p.max = range[1];
+      }
+    });
+  }
+
   function findParam(key) {
     for (var i = 0; i < state.params.length; i++) {
       if (state.params[i].key === key) return state.params[i];
@@ -466,6 +485,11 @@
       if (extra) {
         prev.bulk = extra.bulk;
         prev.formula = extra.formula;
+        prev.lockRange = !!extra.lockRange;
+        if (extra.lockRange) {
+          prev.min = defaultMin;
+          prev.max = defaultMax;
+        }
       }
       return prev;
     }
@@ -478,7 +502,8 @@
       max: defaultMax,
       error: '',
       bulk: extra ? extra.bulk : null,
-      formula: extra ? extra.formula : null
+      formula: extra ? extra.formula : null,
+      lockRange: extra ? !!extra.lockRange : false
     };
   }
 
@@ -504,16 +529,20 @@
     // 仪器参数：I0 / samplelen 每次按样品调整范围，其余四项范围固定
     var resCfg = state.instrument.resolution || {};
     list.push(makeParam('inst.res_width', '分辨率宽度 σ', numberOr(resCfg.width, 0.01701999),
-      true, 0.00075, 0.05));
+      true, LOCKED_RANGES['inst.res_width'][0], LOCKED_RANGES['inst.res_width'][1],
+      { lockRange: true }));
     list.push(makeParam('inst.i0', 'I₀（总光强）', numberOr(state.instrument.i0, 205876),
       true, 100000, 250000));
     list.push(makeParam('inst.ibkg', '本底 I_bkg', numberOr(state.instrument.ibkg, 0.9890035),
-      true, 0, 2));
+      true, LOCKED_RANGES['inst.ibkg'][0], LOCKED_RANGES['inst.ibkg'][1],
+      { lockRange: true }));
     list.push(makeParam('inst.tthoff', '角度偏移 (°)', numberOr(state.instrument.tthoff, 0.002314288),
-      true, 0, 0.01));
+      true, LOCKED_RANGES['inst.tthoff'][0], LOCKED_RANGES['inst.tthoff'][1],
+      { lockRange: true }));
     var footCfg = state.instrument.footprint || {};
     list.push(makeParam('inst.beam_width', '束宽 (mm)', numberOr(footCfg.beam_width, 0.03794963),
-      true, 0.01, 0.05));
+      true, LOCKED_RANGES['inst.beam_width'][0], LOCKED_RANGES['inst.beam_width'][1],
+      { lockRange: true }));
     list.push(makeParam('inst.sample_length', '样品长 (mm)', numberOr(footCfg.sample_length, 5.09446),
       true, 2, 20));
     state.params = list;
@@ -606,20 +635,30 @@
       minInput.type = 'number';
       minInput.step = 'any';
       minInput.value = String(p.min);
-      minInput.addEventListener('change', function () {
-        var v = Number(minInput.value);
-        if (isFinite(v)) p.min = v;
-      });
+      if (p.lockRange) {
+        minInput.disabled = true;
+        minInput.title = '该范围固定，不可修改';
+      } else {
+        minInput.addEventListener('change', function () {
+          var v = Number(minInput.value);
+          if (isFinite(v)) p.min = v;
+        });
+      }
       row.appendChild(minInput);
 
       var maxInput = document.createElement('input');
       maxInput.type = 'number';
       maxInput.step = 'any';
       maxInput.value = String(p.max);
-      maxInput.addEventListener('change', function () {
-        var v = Number(maxInput.value);
-        if (isFinite(v)) p.max = v;
-      });
+      if (p.lockRange) {
+        maxInput.disabled = true;
+        maxInput.title = '该范围固定，不可修改';
+      } else {
+        maxInput.addEventListener('change', function () {
+          var v = Number(maxInput.value);
+          if (isFinite(v)) p.max = v;
+        });
+      }
       row.appendChild(maxInput);
 
       var err = document.createElement('span');
@@ -756,6 +795,7 @@
       }
     }
 
+    applyLockedRanges();
     state.fitRunning = true;
     state.fitHistory = [];
     state.fitGen = 0;
@@ -1223,6 +1263,7 @@
     if (data.algorithm && data.algorithm.fom && $('in-fom')) {
       $('in-fom').value = data.algorithm.fom;
     }
+    applyLockedRanges();
     syncInstrumentControls();
     renderDataList();
     renderStack();

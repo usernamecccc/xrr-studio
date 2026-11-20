@@ -568,3 +568,11 @@ input.is-invalid { border-color: var(--wg-error); }
 .dir-row { display: flex; gap: 8px; align-items: center; }
 .dir-row .dir-input { flex: 1; min-width: 0; }
 .dir-row .btn { flex: none; white-space: nowrap; }
+
+
+/* ---------- 锁定范围的输入框 ---------- */
+input:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+  background: var(--wg-bg-sidebar);
+}
