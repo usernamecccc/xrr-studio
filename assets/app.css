@@ -562,3 +562,9 @@ input.is-invalid { border-color: var(--wg-error); }
   word-break: break-all;
 }
 .dir-input { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; }
+
+
+/* ---------- 目录选择行 ---------- */
+.dir-row { display: flex; gap: 8px; align-items: center; }
+.dir-row .dir-input { flex: 1; min-width: 0; }
+.dir-row .btn { flex: none; white-space: nowrap; }

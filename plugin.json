@@ -1,7 +1,7 @@
 {
   "id": "xrr-studio",
   "name": "XRR 拟合工作台",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "X 射线镜面反射率（XRR）拟合工作台：层结构建模、Parratt 仿真、差分进化拟合",
   "icon": "",
   "entry": "index.html",
@@ -27,7 +27,8 @@
       "export_data": "host",
       "import_hgx": "read",
       "diagnose": "read",
-      "reveal_path": "host"
+      "reveal_path": "host",
+      "pick_directory": "host"
     },
     "agent_tools": [
       "diagnose",

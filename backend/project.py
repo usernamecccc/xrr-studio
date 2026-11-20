@@ -118,6 +118,48 @@ def export_data(params: dict) -> dict:
     return {"path": str(path), "rows": len(rows), "size": path.stat().st_size}
 
 
+def pick_directory(params: dict) -> dict:
+    """弹出系统文件夹选择框，返回用户选的目录（取消则返回空）。"""
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+    except ImportError as exc:
+        raise RuntimeError("当前 Python 缺少 tkinter，无法弹出目录选择框") from exc
+
+    initial = ((params or {}).get("initial") or "").strip().strip('"')
+    if initial:
+        start = Path(os.path.expandvars(os.path.expanduser(initial)))
+        if not start.is_dir():
+            start = start.parent if start.parent.is_dir() else None
+    else:
+        start = None
+    if start is None:
+        start = DEFAULT_DIR if DEFAULT_DIR.exists() else Path.home() / "Documents"
+
+    root_window = None
+    try:
+        root_window = tk.Tk()
+        root_window.withdraw()
+        root_window.attributes("-topmost", True)
+        root_window.update()
+        chosen = filedialog.askdirectory(
+            parent=root_window,
+            title="选择保存目录",
+            initialdir=str(start),
+            mustexist=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"无法打开目录选择框：{exc}") from exc
+    finally:
+        if root_window is not None:
+            try:
+                root_window.destroy()
+            except Exception:  # noqa: BLE001
+                pass
+
+    return {"path": chosen or "", "cancelled": not bool(chosen)}
+
+
 def reveal_path(params: dict) -> dict:
     """在文件管理器中打开文件所在目录（或目录本身）。"""
     raw = ((params or {}).get("path") or "").strip().strip('"')

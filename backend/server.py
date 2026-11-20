@@ -124,6 +124,13 @@ def import_hgx(params, caller=None):
         return _fail(exc)
 
 
+def pick_directory(params, caller=None):
+    try:
+        return _ok(project.pick_directory(params or {}))
+    except Exception as exc:  # noqa: BLE001
+        return _fail(exc)
+
+
 def reveal_path(params, caller=None):
     try:
         return _ok(project.reveal_path(params or {}))
@@ -255,6 +262,16 @@ _TOOLS = [
             "additionalProperties": True,
         },
         "execute": import_hgx,
+    },
+    {
+        "name": "pick_directory",
+        "description": "弹出系统文件夹选择框，返回用户选择的目录路径。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"initial": {"type": "string", "description": "起始目录"}},
+            "additionalProperties": True,
+        },
+        "execute": pick_directory,
     },
     {
         "name": "reveal_path",

@@ -1285,14 +1285,44 @@
     var label = document.createElement('label');
     label.className = 'field';
     var span = document.createElement('span');
-    span.textContent = '保存位置（绝对路径，留空用默认目录）';
+    span.textContent = '保存位置';
+    var row = document.createElement('div');
+    row.className = 'dir-row';
+
     var input = document.createElement('input');
     input.type = 'text';
     input.className = 'dir-input';
     input.value = state.lastDir || '';
-    input.placeholder = defaultPlaceholder || '例如 D:\\XRR 结果';
+    input.placeholder = defaultPlaceholder || '点「浏览…」选择，或直接输入路径';
+
+    var browse = document.createElement('button');
+    browse.type = 'button';
+    browse.className = 'btn btn-sm';
+    browse.textContent = '浏览…';
+    browse.addEventListener('click', function () {
+      browse.disabled = true;
+      browse.textContent = '选择中…';
+      setStatus('请在弹出的系统窗口里选择保存目录…');
+      callBackend('pick_directory', { initial: input.value.trim() }).then(function (res) {
+        if (res && res.path) {
+          input.value = res.path;
+          setStatus('已选择目录：' + res.path);
+        } else {
+          setStatus('已取消目录选择');
+        }
+      }).catch(function (err) {
+        setStatus('无法打开目录选择框：' + (err && err.message ? err.message : err)
+          + '（可直接手动输入路径）', true);
+      }).then(function () {
+        browse.disabled = false;
+        browse.textContent = '浏览…';
+      });
+    });
+
+    row.appendChild(input);
+    row.appendChild(browse);
     label.appendChild(span);
-    label.appendChild(input);
+    label.appendChild(row);
     return { label: label, input: input };
   }
 
