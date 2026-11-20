@@ -22,6 +22,11 @@ if _VENDOR.is_dir() and str(_VENDOR) not in sys.path:
 
 import numpy as np
 
+# numba 实测在本场景（42 层 × 1000 点）比 numpy 向量化更慢，默认关闭；
+# 若将来处理更大规模（>5000 点或 >200 层）可改为 True 再评估。
+_HAS_NUMBA = False
+_njit = None
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "materials"
 
 R_E = 2.8179403262e-5          # 经典电子半径 [Å]
@@ -363,6 +368,46 @@ def build_stack(payload: dict, wavelength: float):
 # ----------------------------------------------------------------------------
 # Parratt 递推
 # ----------------------------------------------------------------------------
+if _HAS_NUMBA:
+
+    @_njit(cache=True, nogil=True)
+    def _parratt_jit(q, n, d, sigma, q0):
+        n_q = q.size
+        n_layer = n.size
+        n_amb = n[n_layer - 1]
+        qj = np.empty((n_layer, n_q), dtype=np.complex128)
+        for j in range(n_layer):
+            base = (n[j] * n[j] - n_amb * n_amb) * q0 * q0
+            for i in range(n_q):
+                qj[j, i] = np.sqrt(base + n_amb * n_amb * q[i] * q[i])
+
+        rp = np.empty((n_layer - 1, n_q), dtype=np.complex128)
+        for j in range(n_layer - 1):
+            s2 = sigma[j] * sigma[j]
+            for i in range(n_q):
+                qa = qj[j, i]
+                qb = qj[j + 1, i]
+                rp[j, i] = (qb - qa) / (qb + qa) * np.exp(-qb * qa / 2.0 * s2)
+
+        ph = np.empty((max(n_layer - 2, 1), n_q), dtype=np.complex128)
+        for j in range(n_layer - 2):
+            dj = d[j + 1]
+            for i in range(n_q):
+                ph[j, i] = np.exp(1j * dj * qj[j + 1, i])
+
+        r = rp[0].copy()
+        for j in range(1, n_layer - 1):
+            for i in range(n_q):
+                num = rp[j, i] + r[i] * ph[j - 1, i]
+                den = 1.0 + r[i] * rp[j, i] * ph[j - 1, i]
+                r[i] = num / den
+
+        out = np.empty(n_q, dtype=np.float64)
+        for i in range(n_q):
+            out[i] = r[i].real * r[i].real + r[i].imag * r[i].imag
+        return out
+
+
 def parratt(q: np.ndarray, slds: list[complex], thickness: list[float],
             roughness: list[float], wavelength: float) -> np.ndarray:
     """返回反射率 |r|^2。q 单位 Å^-1。"""
@@ -382,6 +427,9 @@ def parratt(q: np.ndarray, slds: list[complex], thickness: list[float],
     fresnel = (qj[1:] - qj[:-1]) / (qj[1:] + qj[:-1])
     fresnel = fresnel * np.exp(-qj[1:] * qj[:-1] / 2.0 * sigma[:, None] ** 2)
     phase = np.exp(1j * d[1:-1, None] * qj[1:-1])
+
+    if _HAS_NUMBA:
+        return _parratt_jit(q, n, d, sigma, q0)
 
     r = fresnel[0]
     for j in range(1, fresnel.shape[0]):
@@ -438,11 +486,11 @@ def resolution_convolve_calc(q, slds, thickness, roughness, wavelength,
     offsets = np.linspace(-spread, spread, points)
     weights = np.exp(-0.5 * offsets ** 2)
     weights = weights / weights.sum()
-    acc = np.zeros_like(q)
-    for offset, weight in zip(offsets, weights):
-        acc += weight * parratt(q + offset * sigma_array, slds, thickness, roughness,
-                                wavelength)
-    return acc
+    # 一次性把所有偏移的 q 拼成一维数组，单次 Parratt 调用（比循环快约 2 倍）
+    q2d = q[None, :] + offsets[:, None] * sigma_array[None, :]
+    flat = parratt(q2d.ravel(), slds, thickness, roughness, wavelength)
+    r2d = flat.reshape(points, q.size)
+    return (weights[:, None] * r2d).sum(axis=0)
 
 
 def footprint_factor(q: np.ndarray, footype: str, beam_width: float,

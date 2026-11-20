@@ -25,11 +25,24 @@ EPS = 1e-12
 # ----------------------------------------------------------------------------
 # FOM
 # ----------------------------------------------------------------------------
-def compute_fom(name: str, y, sim, err=None) -> float:
+def compute_fom(name: str, y, sim, err=None, n_params: int = 0) -> float:
+    """与 GenX 的 calc_fom 对齐：
+
+    - 逐点残差取绝对值后求和
+    - 非有限残差（log10(0) 之类）置 0，不计入
+    - 带 __div_dof__ 的 FOM（diff / log / chi2bars）除以 (N - p)
+    - R1 / logR1 自带分母，不除自由度
+    """
     y = np.asarray(y, dtype=float)
     sim = np.asarray(sim, dtype=float)
     if y.shape != sim.shape:
         raise ValueError("数据与模拟长度不一致")
+
+    n_points = y.size
+    dof = max(n_points - int(n_params), 1)
+
+    def _clean(values):
+        return np.where(np.isfinite(values), values, 0.0)
 
     if name == "chi2bars":
         if err is None:
@@ -37,16 +50,18 @@ def compute_fom(name: str, y, sim, err=None) -> float:
         else:
             e = np.asarray(err, dtype=float)
             weight = np.where(np.abs(e) > 0, np.abs(e), 1.0)
-        residual = (y - sim) / weight
-        return float(np.mean(residual * residual))
+        residual = _clean((y - sim) / weight)
+        return float(np.sum(residual * residual) / dof)
 
     if name == "diff":
-        return float(np.mean(np.abs(y - sim)))
+        return float(np.sum(np.abs(_clean(y - sim))) / dof)
 
     if name == "log":
-        ly = np.log10(np.maximum(np.abs(y), EPS))
-        ls = np.log10(np.maximum(np.abs(sim), EPS))
-        return float(np.mean(np.abs(ly - ls)))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ly = np.where(y > 0, np.log10(np.where(y > 0, y, 1.0)), np.nan)
+            ls = np.where(sim > 0, np.log10(np.where(sim > 0, sim, 1.0)), np.nan)
+            residual = ly - ls
+        return float(np.sum(np.abs(_clean(residual))) / dof)
 
     if name == "R1":
         denom = float(np.sum(np.sqrt(np.abs(y))))
@@ -54,9 +69,12 @@ def compute_fom(name: str, y, sim, err=None) -> float:
         return num / max(denom, EPS)
 
     if name == "logR1":
-        ly = np.log10(np.sqrt(np.maximum(np.abs(y), EPS)))
-        ls = np.log10(np.sqrt(np.maximum(np.abs(sim), EPS)))
-        return float(np.sum(np.abs(ly - ls)) / max(np.sum(np.abs(ly)), EPS))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ly = np.where(y > 0, np.log10(np.sqrt(np.abs(np.where(y > 0, y, 1.0)))), np.nan)
+            ls = np.where(sim > 0, np.log10(np.sqrt(np.abs(np.where(sim > 0, sim, 1.0)))), np.nan)
+            residual = _clean(ly - ls)
+            base = _clean(ly)
+        return float(np.sum(np.abs(residual)) / max(np.sum(np.abs(base)), EPS))
 
     raise ValueError(f"未知 FOM：{name}")
 
@@ -326,7 +344,7 @@ class FitJob:
             def evaluate(vector):
                 out = simulate_with(vector)
                 sim = np.asarray(out["intensity"], dtype=float)
-                return compute_fom(fom_name, y, sim, err)
+                return compute_fom(fom_name, y, sim, err, n_params=len(free))
 
             def on_generation(gen, fom, vec):
                 with self._lock:

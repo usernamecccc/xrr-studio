@@ -817,15 +817,21 @@
     syncPlotTabs();
     setStatus('拟合已启动…');
 
+    var fitInstrument = {
+      wavelength: numberOr(state.instrument.wavelength, 1.54),
+      i0: numberOr(state.instrument.i0, 1),
+      ibkg: numberOr(state.instrument.ibkg, 0),
+      tthoff: numberOr(state.instrument.tthoff, 0),
+      resolution: state.instrument.resolution,
+      footprint: state.instrument.footprint
+    };
+    var fitMode = $('in-fitmode') ? $('in-fitmode').value : 'accurate';
+    if (fitMode === 'fast') {
+      fitInstrument.resolution = { type: 'none', width: 0, points: 5, spread: 2 };
+    }
     var payload = {
       stack: state.stack,
-      instrument: {
-        wavelength: numberOr(state.instrument.wavelength, 1.54),
-        i0: numberOr(state.instrument.i0, 1),
-        ibkg: numberOr(state.instrument.ibkg, 0),
-        resolution: state.instrument.resolution,
-        footprint: state.instrument.footprint
-      },
+      instrument: fitInstrument,
       data: { x: ds.x, y: ds.y, error: ds.error, x_unit: ds.xUnit },
       params: state.params.map(function (p) {
         return { key: p.key, label: p.label, value: p.value, fit: p.fit, min: p.min, max: p.max };
