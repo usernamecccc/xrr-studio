@@ -576,3 +576,23 @@ input:disabled {
   cursor: not-allowed;
   background: var(--wg-bg-sidebar);
 }
+
+
+/* ---------- FOM 聚焦按钮 ---------- */
+.plot-focus {
+  margin-left: 8px;
+  border: 1px solid var(--wg-border);
+  background: var(--wg-bg-card);
+  color: var(--wg-text-secondary);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.plot-focus:hover { background: var(--wg-bg-hover); color: var(--wg-text-primary); }
+.plot-focus.is-active {
+  background: var(--wg-accent-container);
+  border-color: var(--wg-border-strong);
+  color: var(--wg-accent);
+}
