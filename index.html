@@ -119,8 +119,8 @@
               </select>
             </label>
             <label class="field">
-              <span>最大代数</span>
-              <input id="in-maxgen" type="number" step="10" value="200" min="1">
+              <span>最大代数（0 = 自动 6×维度×种群）</span>
+              <input id="in-maxgen" type="number" step="10" value="0" min="0">
             </label>
             <label class="field">
               <span>种群大小（0=自动 3×维度）</span>
@@ -143,7 +143,7 @@
             </label>
             <label class="field">
               <span>收敛阈值（0=不启用）</span>
-              <input id="in-spread" type="number" step="0.001" value="0.001" min="0">
+              <input id="in-spread" type="number" step="0.001" value="0" min="0">
             </label>
             <label class="field">
               <span>拟合模式</span>
@@ -201,7 +201,7 @@
             </label>
           </div>
 
-          <p class="hint">分辨率在 q 空间做高斯卷积；footprint 修正低角度照射溢出。两者都会进入拟合的每次评估。</p>
+          <p class="hint">分辨率在横坐标空间（q 或 2θ）做高斯卷积：先乘 footprint 再卷积，与 GenX 的 fast conv 一致。两者都会进入拟合的每次评估。</p>
           <p class="hint">
             <a href="#" id="link-manual-path">手动输入工程路径</a>
             ·

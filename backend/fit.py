@@ -21,6 +21,11 @@ import core
 
 EPS = 1e-12
 
+# 自动代数上限：GenX 的默认上限是 6 × 维度 × 种群，这里再压一个封顶避免超长运行
+AUTO_MAX_GENERATIONS = 1000
+# 连续多少代最优 FOM 无实质改善就提前收工（0 = 不启用，跑满代数）
+DEFAULT_PATIENCE = 200
+
 
 # ----------------------------------------------------------------------------
 # FOM
@@ -211,16 +216,23 @@ def differential_evolution(evaluate, lo, hi, settings, on_generation, should_sto
     if pop_size <= 0:
         pop_size = max(20, 3 * dim)
     spread_tol = float(settings.get("spread_tol", 0.0) or 0.0)
+    patience = int(settings.get("patience", DEFAULT_PATIENCE) or 0)
     seed = settings.get("seed")
     rng = np.random.default_rng(None if seed in (None, "", 0) else int(seed))
 
     span = hi - lo
     pop = lo + rng.random((pop_size, dim)) * span
+    # 第一个个体用当前参数值（对应 GenX 的 use_start_guess），保证结果不差于初值
+    start_vector = settings.get("start_vector")
+    if start_vector is not None and len(start_vector) == dim:
+        pop[0] = np.clip(np.asarray(start_vector, dtype=float), lo, hi)
     fitness = np.array([evaluate(ind) for ind in pop], dtype=float)
     best_idx = int(np.argmin(fitness))
     best_vec = pop[best_idx].copy()
     best_fom = float(fitness[best_idx])
     history = [best_fom]
+    no_improve = 0
+    prev_best = best_fom
 
     for gen in range(1, max_gen + 1):
         if should_stop():
@@ -252,12 +264,60 @@ def differential_evolution(evaluate, lo, hi, settings, on_generation, should_sto
         if on_generation is not None:
             on_generation(gen, best_fom, best_vec)
 
+        if patience > 0:
+            # 相对 0.01% 的改善才算「有进展」，避免末尾的微小抖动一直重置计数
+            threshold = abs(prev_best) * 1e-4
+            if best_fom < prev_best - threshold:
+                no_improve = 0
+            else:
+                no_improve += 1
+            prev_best = best_fom
+            if no_improve >= patience:
+                break
+
         if spread_tol > 0:
             relative = np.std(pop, axis=0) / np.maximum(span, EPS)
             if float(np.max(relative)) < spread_tol:
                 break
 
     return best_vec, best_fom, history
+
+
+def local_refine(evaluate, best_vec, lo, hi, should_stop=None,
+                 max_sweeps=60, initial_frac=0.02, tol=1e-6):
+    """坐标轮换精修：从 DE 最优解出发逐参数试探，步长逐轮减半。
+
+    对应 GenX 里 simplex 精修的作用——DE 擅长跳出局部，但最后一段收敛靠局部搜索。
+    """
+    dim = len(best_vec)
+    if dim == 0:
+        return best_vec, evaluate(best_vec)
+
+    span = np.maximum(hi - lo, EPS)
+    x = np.array(best_vec, dtype=float)
+    fx = float(evaluate(x))
+    step = span * initial_frac
+
+    for _ in range(max_sweeps):
+        if should_stop is not None and should_stop():
+            break
+        improved = False
+        for j in range(dim):
+            for sign in (1.0, -1.0):
+                trial = x.copy()
+                trial[j] = min(max(trial[j] + sign * step[j], lo[j]), hi[j])
+                if trial[j] == x[j]:
+                    continue
+                ft = float(evaluate(trial))
+                if ft < fx:
+                    x, fx = trial, ft
+                    improved = True
+                    break
+        if not improved:
+            step = step * 0.5
+            if float(np.max(step / span)) < tol:
+                break
+    return x, fx
 
 
 # ----------------------------------------------------------------------------
@@ -269,7 +329,7 @@ class FitJob:
         self.payload = payload
         self.state = "running"
         self.generation = 0
-        self.max_generations = int((payload.get("algorithm") or {}).get("max_generations", 200))
+        self.max_generations = int((payload.get("algorithm") or {}).get("max_generations", 0) or 0)
         self.best_fom = None
         self.best_vector = None
         self.history: list[float] = []
@@ -321,6 +381,18 @@ class FitJob:
             if len(free) != len(lo):
                 raise ValueError("参数数量不一致")
 
+            # 代数/种群：0 表示自动。口径与 GenX 一致（6 × 维度 × 种群），并设封顶
+            dim = len(free)
+            pop_size = int(settings.get("population", 0) or 0)
+            if pop_size <= 0:
+                pop_size = max(20, 3 * dim)
+            max_gen = int(settings.get("max_generations", 0) or 0)
+            if max_gen <= 0:
+                max_gen = min(6 * dim * pop_size, AUTO_MAX_GENERATIONS)
+            settings = dict(settings, population=pop_size, max_generations=max_gen,
+                            start_vector=[float(p["value"]) for p in free])
+            self.max_generations = max_gen
+
             base_wavelength = float(instrument.get("wavelength") or 1.54)
             x_unit = data.get("x_unit") or "q"
 
@@ -328,7 +400,7 @@ class FitJob:
                 st, inst = apply_vector(stack, instrument, params, vector)
                 return core.simulate({
                     "wavelength": float(inst.get("wavelength") or base_wavelength),
-                    "x": x.tolist(),
+                    "x": x,
                     "x_unit": x_unit,
                     "ambient": st.get("ambient") or {},
                     "substrate": st.get("substrate") or {},
@@ -356,11 +428,26 @@ class FitJob:
             best_vec, best_fom, history = differential_evolution(
                 evaluate, lo, hi, settings, on_generation, self.should_stop)
 
+            # 局部精修（对应 GenX 的 simplex 环节）：DE 之后逐坐标收缩，改善最后一段收敛
+            if settings.get("refine", True) and not self.should_stop():
+                try:
+                    refined_vec, refined_fom = local_refine(
+                        evaluate, best_vec, lo, hi, self.should_stop)
+                    if refined_fom < best_fom:
+                        best_vec, best_fom = refined_vec, refined_fom
+                        history.append(float(refined_fom))
+                        with self._lock:
+                            self.best_fom = float(refined_fom)
+                            self.best_vector = [float(v) for v in refined_vec]
+                            self.history.append(float(refined_fom))
+                except Exception:  # noqa: BLE001
+                    pass
+
             # 用最优参数算一次终态曲线
             st, inst = apply_vector(stack, instrument, params, best_vec)
             final = core.simulate({
                 "wavelength": float(inst.get("wavelength") or base_wavelength),
-                "x": x.tolist(),
+                "x": x,
                 "x_unit": x_unit,
                 "ambient": st.get("ambient") or {},
                 "substrate": st.get("substrate") or {},

@@ -210,6 +210,37 @@
     });
   }
 
+  // 按 FOM 核对横坐标单位：θ 与 2θ 的数值范围重叠，光看数值猜不准。
+  // 用当前层结构对三种单位各仿真一次，只有明显更优（FOM 减半以上）才自动切换。
+  function autoDetectUnit(ds) {
+    if (!ds || !ds.x || !ds.x.length) return;
+    var payload = {
+      stack: state.stack,
+      instrument: state.instrument,
+      data: { x: ds.x, y: ds.y },
+      algorithm: { fom: 'log' }
+    };
+    callBackend('guess_unit', payload).then(function (res) {
+      if (!res || !res.best) return;
+      var current = ds.xUnit;
+      var currentFom = res.fom ? res.fom[current] : null;
+      var bestFom = res.best_fom;
+      if (res.best !== current && (currentFom == null || bestFom * 2 < currentFom)) {
+        ds.xUnit = res.best;
+        renderDataList();
+        setStatus('已按 FOM 自动判定横坐标为 ' + unitAxisLabel(res.best)
+          + '（FOM ' + fmt(bestFom) + '，原 ' + unitLabel(current)
+          + ' 为 ' + fmt(currentFom) + '）· 按 F9 仿真');
+        draw();
+      } else {
+        setStatus('已导入 ' + ds.name + '（' + ds.x.length + ' 点）· 单位 '
+          + unitLabel(current) + ' · FOM ' + fmt(currentFom) + ' · 按 F9 仿真');
+      }
+    }).catch(function () {
+      setStatus('已导入 ' + ds.name + '（' + ds.x.length + ' 点）· 编辑层结构后按 F9 仿真');
+    });
+  }
+
   function importFiles(files) {
     var list = Array.prototype.slice.call(files || []);
     if (!list.length) return;
@@ -222,9 +253,9 @@
           if (!rows.length) {
             setStatus('无法从 ' + file.name + ' 解析出数据列', true);
           } else {
-            addDataset(file.name.replace(/\.[^.]+$/, ''), rows);
-            setStatus('已导入 ' + file.name + '（' + rows.length + ' 点）'
-              + ' · 编辑层结构后按 F9 仿真');
+            var ds = addDataset(file.name.replace(/\.[^.]+$/, ''), rows);
+            setStatus('已导入 ' + file.name + '（' + rows.length + ' 点）· 正在核对横坐标单位…');
+            autoDetectUnit(ds);
           }
         } catch (err) {
           setStatus('读取失败：' + err.message, true);
@@ -692,6 +723,7 @@
       wavelength: numberOr(state.instrument.wavelength, 1.54),
       i0: numberOr(state.instrument.i0, 1),
       ibkg: numberOr(state.instrument.ibkg, 0),
+      tthoff: numberOr(state.instrument.tthoff, 0),
       resolution: state.instrument.resolution,
       footprint: state.instrument.footprint,
       ambient: state.stack.ambient,
@@ -784,7 +816,8 @@
   function algorithmSettings() {
     return {
       fom: $('in-fom') ? $('in-fom').value : 'chi2bars',
-      max_generations: Math.max(1, Math.round(numberOr($('in-maxgen') && $('in-maxgen').value, 200))),
+      // 0 = 自动：后端按 GenX 口径取 6 × 维度 × 种群（带封顶）
+      max_generations: Math.max(0, Math.round(numberOr($('in-maxgen') && $('in-maxgen').value, 0))),
       population: Math.max(0, Math.round(numberOr($('in-pop') && $('in-pop').value, 0))),
       f: numberOr($('in-f') && $('in-f').value, 0.7),
       cr: numberOr($('in-cr') && $('in-cr').value, 0.7),
@@ -978,6 +1011,36 @@
     if (!env) return;
     if (state.plotMode === 'fom') drawFom(env);
     else drawData(env);
+  }
+
+  // 离屏渲染当前曲线为 PNG（data URL），用于 Word 报告。
+  // 逻辑尺寸 × scale 得到实际像素，例如 1200×700 × 2 = 2400×1400。
+  function renderCurvePng(logicW, logicH, scale) {
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.round(logicW * scale);
+    canvas.height = Math.round(logicH * scale);
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, logicW, logicH);
+
+    // 报告是白底，临时把主题色换成深色，避免暗色主题下文字看不清
+    var root = document.documentElement;
+    var keys = ['--wg-text-secondary', '--wg-border', '--wg-accent'];
+    var backup = {};
+    keys.forEach(function (k) { backup[k] = root.style.getPropertyValue(k); });
+    root.style.setProperty('--wg-text-secondary', '#3f3f46');
+    root.style.setProperty('--wg-border', '#d4d4d8');
+    root.style.setProperty('--wg-accent', '#2563eb');
+    try {
+      drawData({ ctx: ctx, width: logicW, height: logicH });
+    } finally {
+      keys.forEach(function (k) {
+        if (backup[k]) root.style.setProperty(k, backup[k]);
+        else root.style.removeProperty(k);
+      });
+    }
+    return canvas.toDataURL('image/png');
   }
 
   function drawData(env) {
@@ -1526,7 +1589,7 @@
     var pathInput = document.createElement('input');
     pathInput.type = 'text';
     pathInput.id = 'proj-path';
-    pathInput.placeholder = 'D:\\genx_plugin\\GenX拟合实例\\实例1-NiVTi多层膜\\NiVTi-N20-fit model.hgx';
+    pathInput.placeholder = 'D:\\XRR\\你的工程.json';
     label.appendChild(span);
     label.appendChild(pathInput);
     body.appendChild(label);
@@ -1737,7 +1800,8 @@
       ['curve_csv', '拟合曲线 .csv', 'csv'],
       ['structure', '膜层结构参数表（含密度占 bulk %）', 'csv'],
       ['params', '拟合参数表（值 / 边界 / 误差）', 'csv'],
-      ['summary', '结果摘要（文本）', 'txt']
+      ['summary', '结果摘要（文本）', 'txt'],
+      ['word', 'Word 报告 .docx（含曲线图）', 'docx']
     ];
     var chosen = 'curve';
     options.forEach(function (opt, index) {
@@ -1772,6 +1836,40 @@
     body.appendChild(dirField.label);
 
     openModal('导出', body, function () {
+      var dir = dirField.input.value.trim();
+      if (chosen === 'word') {
+        var dsNow = activeDataset();
+        var hasSim = !!(state.sim && state.sim.intensity && state.sim.intensity.length);
+        if (!dsNow && !hasSim) {
+          setStatus('先导入数据并仿真，再导出 Word', true);
+          return;
+        }
+        setStatus('正在生成 Word 报告…');
+        var png = null;
+        try {
+          png = renderCurvePng(1200, 700, 2);
+        } catch (err) {
+          png = null;
+        }
+        callBackend('export_word', {
+          data: collectProject(),
+          image: png,
+          name: nameInput.value.trim(),
+          dir: dir,
+          title: 'XRR 拟合报告',
+          source: dsNow ? dsNow.name : ''
+        }).then(function (res) {
+          state.lastDir = dir;
+          closeModal();
+          setStatus('已生成 Word 报告：' + res.path);
+          showSavedResult('导出成功', res.path,
+            '已写入 ' + Math.round(res.size / 1024) + ' KB'
+            + (res.has_image ? '（含曲线图）' : '（无曲线图，先仿真再导出）'));
+        }).catch(function (err) {
+          setStatus('导出失败：' + (err && err.message ? err.message : err), true);
+        });
+        return;
+      }
       var rows;
       var ext = 'csv';
       var kind = chosen;
@@ -1791,7 +1889,6 @@
         rows = buildSummaryRows();
         ext = 'txt';
       }
-      var dir = dirField.input.value.trim();
       setStatus('正在导出…');
       callBackend('export_data', {
         kind: kind,

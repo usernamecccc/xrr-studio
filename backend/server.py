@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import math
 import sys
 import traceback
 
@@ -20,6 +21,7 @@ import core
 import fit
 import hgx
 import project
+import word
 
 try:
     from wgallop_plugin import serve
@@ -56,6 +58,55 @@ def materials(params=None, caller=None):
 def sld_profile(params, caller=None):
     try:
         return _ok(core.sld_profile(params or {}))
+    except Exception as exc:  # noqa: BLE001
+        return _fail(exc)
+
+
+def guess_unit(params, caller=None):
+    """按 FOM 自动识别横坐标单位：对 q / 2theta / theta 各仿真一次，取 FOM 最小者。
+
+    用于文本数据导入后校正单位猜测（XRR 里 θ 与 2θ 数值范围重叠，光看数值猜不准）。
+    """
+    try:
+        payload = params or {}
+        stack = payload.get("stack") or {}
+        inst = payload.get("instrument") or {}
+        data = payload.get("data") or {}
+        x = data.get("x") or []
+        y = data.get("y") or []
+        if not x or not y:
+            raise ValueError("缺少数据")
+        fom_name = (payload.get("algorithm") or {}).get("fom") or "log"
+        if fom_name not in fit.FOM_NAMES:
+            fom_name = "log"
+
+        results = {}
+        for unit in ("q", "2theta", "theta"):
+            try:
+                sim = core.simulate({
+                    "wavelength": float(inst.get("wavelength") or 1.54),
+                    "x": x,
+                    "x_unit": unit,
+                    "ambient": stack.get("ambient") or {},
+                    "substrate": stack.get("substrate") or {},
+                    "segments": stack.get("segments") or [],
+                    "i0": float(inst.get("i0", 1.0)),
+                    "ibkg": float(inst.get("ibkg", 0.0)),
+                    "resolution": inst.get("resolution") or {},
+                    "footprint": inst.get("footprint") or {},
+                    "tthoff": float(inst.get("tthoff", 0.0) or 0.0),
+                })["intensity"]
+                value = float(fit.compute_fom(fom_name, y, sim, None, n_params=0))
+                results[unit] = value if math.isfinite(value) else None
+            except Exception:  # noqa: BLE001
+                results[unit] = None
+
+        usable = {k: v for k, v in results.items() if v is not None}
+        if not usable:
+            raise ValueError("三种单位都无法完成仿真")
+        best = min(usable, key=usable.get)
+        return _ok({"fom": results, "best": best, "best_fom": usable[best],
+                    "fom_name": fom_name})
     except Exception as exc:  # noqa: BLE001
         return _fail(exc)
 
@@ -166,6 +217,13 @@ def export_data(params, caller=None):
         return _fail(exc)
 
 
+def export_word(params, caller=None):
+    try:
+        return _ok(word.export_word(params or {}))
+    except Exception as exc:  # noqa: BLE001
+        return _fail(exc)
+
+
 _SIM_SCHEMA = {
     "type": "object",
     "properties": {
@@ -214,6 +272,21 @@ _TOOLS = [
         "description": "返回层结构的 SLD 深度剖面。",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": True},
         "execute": sld_profile,
+    },
+    {
+        "name": "guess_unit",
+        "description": "按 FOM 自动识别横坐标单位（q / 2theta / theta），返回三者 FOM 与最优者。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "stack": {"type": "object"},
+                "instrument": {"type": "object"},
+                "data": {"type": "object"},
+                "algorithm": {"type": "object"},
+            },
+            "additionalProperties": True,
+        },
+        "execute": guess_unit,
     },
     {
         "name": "fit_start",
@@ -326,6 +399,24 @@ _TOOLS = [
             "additionalProperties": True,
         },
         "execute": export_data,
+    },
+    {
+        "name": "export_word",
+        "description": "导出 Word 报告（.docx）：仪器条件、层结构、参数表、拟合结果与曲线图。",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "data": {"type": "object", "description": "工程内容"},
+                "image": {"type": "string", "description": "曲线 PNG 的 data URL（可选）"},
+                "name": {"type": "string"},
+                "dir": {"type": "string"},
+                "title": {"type": "string"},
+                "source": {"type": "string"},
+            },
+            "required": ["data"],
+            "additionalProperties": True,
+        },
+        "execute": export_word,
     },
 ]
 
